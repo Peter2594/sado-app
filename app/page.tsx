@@ -33,7 +33,7 @@ export default function Home() {
 
       <div className="flex gap-2 mb-6">
         <input
-          type="text"
+          type="haha haha"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && addTodo()}
