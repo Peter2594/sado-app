@@ -1,11 +1,10 @@
-/// <reference types="pdf-parse" />
 import JSZip from "jszip";
-
-const pdfParse: (dataBuffer: Buffer, options?: any) => Promise<any> = require("pdf-parse");
+import { PDFParse } from "pdf-parse";
 
 export async function extractPdfText(buffer: Buffer): Promise<string> {
-  const data = await pdfParse(buffer);
-  return data.text;
+  const parser = new PDFParse({ data: buffer });
+  const result = await parser.getText();
+  return result.text;
 }
 
 export async function extractPptxText(buffer: Buffer): Promise<string> {

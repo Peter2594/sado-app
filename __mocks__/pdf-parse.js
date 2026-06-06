@@ -1,3 +1,10 @@
-module.exports = async function pdfParse(buffer) {
-  return { text: `mocked pdf content from ${buffer.length} bytes` };
-};
+class PDFParse {
+  constructor(options) {
+    this._buffer = options.data;
+  }
+  async getText() {
+    return { text: `mocked pdf content from ${this._buffer.length} bytes` };
+  }
+}
+
+module.exports = { PDFParse };

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Anthropic from "@anthropic-ai/sdk";
 import { extractPdfText, extractPptxText } from "@/app/lib/extractors";
 import type { Question } from "@/app/types";
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY!);
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: Request) {
   try {
@@ -35,8 +35,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "文件內容不足，無法生成考題" }, { status: 400 });
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
     const prompt = `你是出題老師。根據以下內容，生成 ${count} 道繁體中文四選一選擇題。
 
 規則：
@@ -51,10 +49,19 @@ export async function POST(req: Request) {
 文件內容：
 ${text.slice(0, 8000)}`;
 
-    const result = await model.generateContent(prompt);
-    const raw = result.response.text().trim();
+    const stream = client.messages.stream({
+      model: "claude-opus-4-8",
+      max_tokens: 4096,
+      messages: [{ role: "user", content: prompt }],
+    });
 
-    // Strip markdown code fences if Gemini wraps the JSON
+    const response = await stream.finalMessage();
+    const textBlock = response.content.find((b) => b.type === "text");
+    if (!textBlock || textBlock.type !== "text") {
+      throw new Error("No text in response");
+    }
+
+    const raw = textBlock.text.trim();
     const jsonStr = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
     const questions: Question[] = JSON.parse(jsonStr);
 
