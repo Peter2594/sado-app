@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import UploadZone from "@/app/components/UploadZone";
 import QuizCard from "@/app/components/QuizCard";
 import ResultCard from "@/app/components/ResultCard";
@@ -17,8 +17,13 @@ export default function Home() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<Record<number, OptionKey>>({});
   const [apiError, setApiError] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
 
   async function handleGenerate(file: File, count: QuestionCount) {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setApiError("");
     setAppState("loading");
 
@@ -27,7 +32,11 @@ export default function Home() {
     formData.append("count", count.toString());
 
     try {
-      const res = await fetch("/api/generate", { method: "POST", body: formData });
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
       const data = await res.json();
 
       if (!res.ok) {
@@ -36,10 +45,17 @@ export default function Home() {
         return;
       }
 
+      if (!data.questions || data.questions.length === 0) {
+        setApiError("生成失敗：未取得任何題目");
+        setAppState("upload");
+        return;
+      }
+
       setQuestions(data.questions);
       setAnswers({});
       setAppState("quiz");
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       setApiError("網路錯誤，請重試");
       setAppState("upload");
     }
@@ -50,6 +66,7 @@ export default function Home() {
   }
 
   function handleReset() {
+    abortRef.current?.abort();
     setQuestions([]);
     setAnswers({});
     setApiError("");
