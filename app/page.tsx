@@ -1,132 +1,175 @@
 "use client";
-
 import { useState } from "react";
-// 1. 這裡先宣告一個模擬 AI 的 function，方便你不用設定 Key 也能測試
-// 之後你可以改寫成真正的 API 呼叫
+import UploadZone from "@/app/components/UploadZone";
+import QuizCard from "@/app/components/QuizCard";
+import ResultCard from "@/app/components/ResultCard";
+import type { Question, AppState, OptionKey, QuestionCount } from "@/app/types";
 
-interface Todo {
-  id: number;
-  text: string;
-  done: boolean;
+function scoreLabel(score: number, total: number): string {
+  if (score === total) return "全對！太厲害了！";
+  if (score >= total * 0.8) return "很不錯！繼續保持！";
+  if (score >= total * 0.6) return "還不錯，再努力一點！";
+  return "繼續加油！";
 }
 
 export default function Home() {
-  const [todos, setTodos] = useState<Todo[]>([]);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [appState, setAppState] = useState<AppState>("upload");
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [answers, setAnswers] = useState<Record<number, OptionKey>>({});
+  const [apiError, setApiError] = useState("");
 
-  function addTodo() {
-    const text = input.trim();
-    if (!text) return;
-    setTodos([...todos, { id: Date.now(), text, done: false }]);
-    setInput("");
+  async function handleGenerate(file: File, count: QuestionCount) {
+    setApiError("");
+    setAppState("loading");
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("count", count.toString());
+
+    try {
+      const res = await fetch("/api/generate", { method: "POST", body: formData });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setApiError(data.error ?? "生成失敗，請重試");
+        setAppState("upload");
+        return;
+      }
+
+      setQuestions(data.questions);
+      setAnswers({});
+      setAppState("quiz");
+    } catch {
+      setApiError("網路錯誤，請重試");
+      setAppState("upload");
+    }
   }
 
-  // 2. 新增 AI 拆解任務的功能
-  async function aiDecompose() {
-    if (!input.trim()) return;
-    setIsLoading(true);
-    
-    // 模擬 AI 回傳延遲與結果 (未來這裡可串接 Google Gemini)
-    setTimeout(() => {
-      const aiResults = [
-        `規劃 ${input} 的時程`,
-        `準備 ${input} 所需資料`,
-        `執行 ${input} 第一階段`
-      ];
-      
-      const newTodos = aiResults.map(text => ({
-        id: Date.now() + Math.random(),
-        text: text,
-        done: false
-      }));
-
-      setTodos([...todos, ...newTodos]);
-      setInput("");
-      setIsLoading(false);
-    }, 1000);
+  function handleSelect(questionId: number, key: OptionKey) {
+    setAnswers(prev => ({ ...prev, [questionId]: key }));
   }
 
-  function toggleTodo(id: number) {
-    setTodos(todos.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+  function handleReset() {
+    setQuestions([]);
+    setAnswers({});
+    setApiError("");
+    setAppState("upload");
   }
 
-  function deleteTodo(id: number) {
-    setTodos(todos.filter((t) => t.id !== id));
-  }
+  const answeredCount = Object.keys(answers).length;
+  const score = questions.filter(q => answers[q.id] === q.answer).length;
 
   return (
-    <main className="min-h-screen bg-gray-50 py-12 px-4 font-sans text-slate-900">
-      <div className="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        
-        <div className="flex items-center gap-3 mb-8">
-          <div className="bg-indigo-600 w-2 h-8 rounded-full"></div>
-          <h1 className="text-3xl font-black tracking-tight text-indigo-900">SADo App <span className="text-sm font-normal text-indigo-400">AI Plus</span></h1>
-        </div>
+    <main className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 py-12 px-4">
+      <div className="max-w-2xl mx-auto">
+        <header className="flex items-center gap-3 mb-8">
+          <div className="bg-indigo-600 w-2 h-8 rounded-full" />
+          <h1 className="text-3xl font-black tracking-tight text-indigo-900">
+            模擬考題生成器
+            <span className="text-sm font-normal text-indigo-400 ml-2">AI Powered</span>
+          </h1>
+        </header>
 
-        <div className="flex flex-col gap-2 mb-8">
-          <input
-            type="text" 
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addTodo()}
-            placeholder="今天打算做什麼？"
-            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-          />
-          <div className="flex gap-2">
-            <button 
-              onClick={addTodo} 
-              className="flex-1 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 active:scale-95 transition-all shadow-md"
-            >
-              Add
-            </button>
-            {/* 3. AI 魔法按鈕 */}
-            <button 
-              onClick={aiDecompose}
-              disabled={isLoading}
-              className="flex-1 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-semibold rounded-xl hover:opacity-90 active:scale-95 transition-all shadow-md disabled:opacity-50"
-            >
-              {isLoading ? "AI 思考中..." : "✨ AI 拆解"}
-            </button>
-          </div>
-        </div>
-
-        <div className="flex justify-between items-center mb-4 px-1">
-          <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider">任務清單</h2>
-          <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full font-medium">
-            {todos.filter(t => !t.done).length} 待完成
-          </span>
-        </div>
-
-        {todos.length === 0 && (
-          <div className="text-center py-10">
-            <p className="text-gray-400 italic">目前沒有任何任務，試試 AI 拆解功能吧！</p>
+        {appState === "upload" && (
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+            {apiError && (
+              <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 text-sm">
+                {apiError}
+              </div>
+            )}
+            <UploadZone onGenerate={handleGenerate} />
           </div>
         )}
 
-        <ul className="space-y-3">
-          {todos.map((todo) => (
-            <li key={todo.id} className="group flex items-center gap-3 p-4 rounded-xl border border-gray-50 bg-gray-50/50 hover:bg-white hover:shadow-md transition-all">
-              <input
-                type="checkbox"
-                checked={todo.done}
-                onChange={() => toggleTodo(todo.id)}
-                className="w-5 h-5 rounded-md border-gray-300 text-indigo-600 cursor-pointer"
-              />
-              <span className={`flex-1 text-base ${todo.done ? "line-through text-gray-400" : "text-slate-700 font-medium"}`}>
-                {todo.text}
+        {appState === "loading" && (
+          <div className="bg-white rounded-2xl shadow-xl p-16 text-center border border-gray-100">
+            <div className="text-5xl mb-4 animate-bounce">✨</div>
+            <p className="text-lg font-semibold text-indigo-700">
+              AI 正在根據你的文件生成考題...
+            </p>
+            <p className="text-gray-400 text-sm mt-2">這可能需要 10–30 秒</p>
+          </div>
+        )}
+
+        {appState === "quiz" && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl shadow-sm p-4 border border-gray-100 flex justify-between items-center sticky top-4 z-10">
+              <span className="text-sm text-gray-500">
+                已作答{" "}
+                <strong className="text-indigo-600">{answeredCount}</strong>
+                {" / "}{questions.length}
               </span>
-              <button onClick={() => deleteTodo(todo.id)} className="opacity-0 group-hover:opacity-100 text-rose-500 hover:bg-rose-50 p-2 rounded-lg transition-all">
-                刪除
+              <button
+                type="button"
+                onClick={() => setAppState("results")}
+                disabled={answeredCount < questions.length}
+                className="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-xl
+                  hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                交卷
               </button>
-            </li>
-          ))}
-        </ul>
+            </div>
+
+            {questions.map((q, i) => (
+              <QuizCard
+                key={q.id}
+                question={q}
+                index={i}
+                selected={answers[q.id] ?? null}
+                onSelect={key => handleSelect(q.id, key)}
+              />
+            ))}
+
+            <div className="flex justify-center py-4">
+              <button
+                type="button"
+                onClick={() => setAppState("results")}
+                disabled={answeredCount < questions.length}
+                className="px-10 py-4 bg-indigo-600 text-white font-bold rounded-xl
+                  hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed
+                  transition-all shadow-lg"
+              >
+                交卷
+              </button>
+            </div>
+          </div>
+        )}
+
+        {appState === "results" && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl shadow-xl p-8 text-center border border-gray-100">
+              <div className="text-5xl mb-3">🎉</div>
+              <p className="text-4xl font-black text-indigo-900">
+                {score}
+                <span className="text-xl font-normal text-gray-400 ml-1">
+                  / {questions.length} 分
+                </span>
+              </p>
+              <p className="text-gray-500 mt-2">{scoreLabel(score, questions.length)}</p>
+            </div>
+
+            {questions.map((q, i) => (
+              <ResultCard
+                key={q.id}
+                question={q}
+                index={i}
+                selected={answers[q.id] ?? null}
+              />
+            ))}
+
+            <div className="flex justify-center py-4">
+              <button
+                type="button"
+                onClick={handleReset}
+                className="px-10 py-4 bg-gradient-to-r from-indigo-600 to-purple-600
+                  text-white font-bold rounded-xl hover:opacity-90 transition-all shadow-lg"
+              >
+                重新上傳
+              </button>
+            </div>
+          </div>
+        )}
       </div>
-      
-      <footer className="mt-8 text-center text-gray-400 text-xs">
-        SADo App · AI Workflow Integration
-      </footer>
     </main>
   );
 }
